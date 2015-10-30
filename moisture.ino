@@ -15,13 +15,14 @@
 MySensor gw;
 MyMessage msg(CHILD_ID_MOISTURE, V_HUM);
 MyMessage voltage_msg(CHILD_ID_BATTERY, V_VOLTAGE);
+long oldvoltage = 0;
 
 void setup()
 {
   pinMode(SENSOR_POWER_PIN, OUTPUT);
   gw.begin();
 
-  gw.sendSketchInfo("Plant moisture w bat", "1.1");
+  gw.sendSketchInfo("Plant moisture w bat", "1.2");
 
   gw.present(CHILD_ID_MOISTURE, S_HUM);
   delay(250);
@@ -32,12 +33,16 @@ void loop()
 {
   digitalWrite(SENSOR_POWER_PIN, HIGH); // Power on the sensor
   gw.sleep(STABILIZATION_TIME);
-  int moistureLevel = (1023 - analogRead(SENSOR_ANALOG_PIN)) / 10.23;
+  int moistureLevel = (1023 - analogRead(SENSOR_ANALOG_PIN));
   digitalWrite(SENSOR_POWER_PIN, LOW);
-  gw.send(msg.set(moistureLevel));
+  // Always send moisture information so the controller sees that the node is alive
+  gw.send(msg.set(moistureLevel / 10.23, 2));
   long voltage = readVcc();
-  gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts and set wants volts and how many decimals (3 in our case)
-  gw.sendBatteryLevel(round((voltage - BATTERY_ZERO) * 100.0 / (BATTERY_FULL - BATTERY_ZERO)));
+  if (oldvoltage != voltage) { // Only send battery information if voltage has changed, to conserve battery.
+    gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts and set wants volts and how many decimals (3 in our case)
+    gw.sendBatteryLevel(round((voltage - BATTERY_ZERO) * 100.0 / (BATTERY_FULL - BATTERY_ZERO)));
+    oldvoltage = voltage;
+  }
   gw.sleep(SLEEP_TIME);
 }
 
