@@ -10,7 +10,7 @@
 #define SLEEP_TIME 300000 // Sleep time between reads (in milliseconds)
 #define STABILIZATION_TIME 500 // Let the sensor stabilize before reading
 #define BATTERY_FULL 3700 // 3,700 millivolts
-#define BATTERY_ZERO 1700 // 1,700 millivolts
+#define BATTERY_ZERO 1900 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up)
 
 MySensor gw;
 MyMessage msg(CHILD_ID_MOISTURE, V_HUM);
