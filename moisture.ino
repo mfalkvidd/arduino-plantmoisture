@@ -2,41 +2,51 @@
 #include <MySensor.h>
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
+#define N_ELEMENTS(array) (sizeof(array)/sizeof((array)[0]))
 
 #define CHILD_ID_MOISTURE 0
 #define CHILD_ID_BATTERY 1
-#define SENSOR_ANALOG_PIN 0
-#define SENSOR_POWER_PIN 8
-#define SLEEP_TIME 300000 // Sleep time between reads (in milliseconds)
-#define STABILIZATION_TIME 500 // Let the sensor stabilize before reading
-#define BATTERY_FULL 3700 // 3,700 millivolts
-#define BATTERY_ZERO 1900 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up)
+#define SLEEP_TIME 21600000 // Sleep time between reads (in milliseconds)
+#define STABILIZATION_TIME 1000 // Let the sensor stabilize before reading
+#define BATTERY_FULL 3000 // 3,000 millivolts for 2xAA
+#define BATTERY_ZERO 2800 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up. 2.8V limit for Atmega328 without BOD disabled))
+const int SENSOR_ANALOG_PINS[] = {A0, A1}; // Sensor is connected to these two pins. Avoid A3 if using ATSHA204. A6 and A7 cannot be used because they don't have pullups.
 
 MySensor gw;
 MyMessage msg(CHILD_ID_MOISTURE, V_HUM);
 MyMessage voltage_msg(CHILD_ID_BATTERY, V_VOLTAGE);
 long oldvoltage = 0;
+byte direction = 0;
 
 void setup()
 {
-  pinMode(SENSOR_POWER_PIN, OUTPUT);
   gw.begin();
 
-  gw.sendSketchInfo("Plant moisture w bat", "1.2");
+  gw.sendSketchInfo("Plant moisture w bat", "1.4");
 
   gw.present(CHILD_ID_MOISTURE, S_HUM);
   delay(250);
   gw.present(CHILD_ID_BATTERY, S_CUSTOM);
+  for (int i = 0; i < N_ELEMENTS(SENSOR_ANALOG_PINS); i++) {
+    pinMode(SENSOR_ANALOG_PINS[i], OUTPUT);
+    digitalWrite(SENSOR_ANALOG_PINS[i], LOW);
+  }
 }
 
 void loop()
 {
-  digitalWrite(SENSOR_POWER_PIN, HIGH); // Power on the sensor
+  pinMode(SENSOR_ANALOG_PINS[direction], INPUT_PULLUP); // Power on the sensor
+  analogRead(SENSOR_ANALOG_PINS[direction]);// Read once to let the ADC capacitor start charging
   gw.sleep(STABILIZATION_TIME);
-  int moistureLevel = (1023 - analogRead(SENSOR_ANALOG_PIN));
-  digitalWrite(SENSOR_POWER_PIN, LOW);
+  int moistureLevel = (1023 - analogRead(SENSOR_ANALOG_PINS[direction]));
+
+  // Turn off the sensor to conserve battery and minimize corrosion
+  pinMode(SENSOR_ANALOG_PINS[direction], OUTPUT);
+  digitalWrite(SENSOR_ANALOG_PINS[direction], LOW);
+
+  direction = (direction + 1) % 2; // Make direction alternate between 0 and 1 to reverse polarity which reduces corrosion
   // Always send moisture information so the controller sees that the node is alive
-  gw.send(msg.set(moistureLevel / 10.23, 2));
+  gw.send(msg.set(moistureLevel / 10.23, 1));
   long voltage = readVcc();
   if (oldvoltage != voltage) { // Only send battery information if voltage has changed, to conserve battery.
     gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts and set wants volts and how many decimals (3 in our case)
@@ -72,3 +82,4 @@ long readVcc() {
   result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
   return result; // Vcc in millivolts
 }
+
