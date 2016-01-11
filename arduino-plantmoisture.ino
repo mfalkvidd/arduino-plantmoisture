@@ -6,7 +6,7 @@
 
 #define CHILD_ID_MOISTURE 0
 #define CHILD_ID_BATTERY 1
-#define SLEEP_TIME 21600000 // Sleep time between reads (in milliseconds)
+#define SLEEP_TIME 3600000 // Sleep time between reads (in milliseconds)
 #define STABILIZATION_TIME 1000 // Let the sensor stabilize before reading
 #define BATTERY_FULL 3000 // 3,000 millivolts for 2xAA
 #define BATTERY_ZERO 2800 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up. 2.8V limit for Atmega328 without BOD disabled))
