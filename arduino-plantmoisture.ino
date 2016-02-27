@@ -6,7 +6,7 @@
 
 #define CHILD_ID_MOISTURE 0
 #define CHILD_ID_BATTERY 1
-#define SLEEP_TIME 3600000 // Sleep time between reads (in milliseconds)
+#define SLEEP_TIME 1800000 // Sleep time between reads (in milliseconds)
 #define STABILIZATION_TIME 1000 // Let the sensor stabilize before reading
 #define BATTERY_FULL 3000 // 3,000 millivolts for 2xAA
 #define BATTERY_ZERO 2800 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up. 2.8V limit for Atmega328 without BOD disabled))
@@ -17,12 +17,13 @@ MyMessage msg(CHILD_ID_MOISTURE, V_HUM);
 MyMessage voltage_msg(CHILD_ID_BATTERY, V_VOLTAGE);
 long oldvoltage = 0;
 byte direction = 0;
+int oldMoistureLevel = -1;
 
 void setup()
 {
   gw.begin();
 
-  gw.sendSketchInfo("Plant moisture w bat", "1.4");
+  gw.sendSketchInfo("Plant moisture w bat", "1.5");
 
   gw.present(CHILD_ID_MOISTURE, S_HUM);
   delay(250);
@@ -46,10 +47,17 @@ void loop()
 
   direction = (direction + 1) % 2; // Make direction alternate between 0 and 1 to reverse polarity which reduces corrosion
   // Always send moisture information so the controller sees that the node is alive
-  gw.send(msg.set(moistureLevel / 10.23, 1));
+
+  // Send rolling average of 2 samples to get rid of the "ripple" produced by different resistance in the internal pull-up resistors
+  // See http://forum.mysensors.org/topic/2147/office-plant-monitoring/55 for more information
+  if (oldMoistureLevel == -1) { // First reading, save value
+    oldMoistureLevel = moistureLevel;
+  }
+  gw.send(msg.set((moistureLevel + oldMoistureLevel +  0.5) / 2 / 10.23, 1));
+  oldMoistureLevel = moistureLevel;
   long voltage = readVcc();
   if (oldvoltage != voltage) { // Only send battery information if voltage has changed, to conserve battery.
-    gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts and set wants volts and how many decimals (3 in our case)
+    gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts. Set wants volts and how many decimals (3 in our case)
     gw.sendBatteryLevel(round((voltage - BATTERY_ZERO) * 100.0 / (BATTERY_FULL - BATTERY_ZERO)));
     oldvoltage = voltage;
   }
