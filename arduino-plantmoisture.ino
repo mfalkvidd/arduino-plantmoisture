@@ -7,6 +7,7 @@
 #define CHILD_ID_MOISTURE 0
 #define CHILD_ID_BATTERY 1
 #define SLEEP_TIME 1800000 // Sleep time between reads (in milliseconds)
+#define THRESHOLD 1.1 // Only make a new reading with reverse polarity if the change is larger than 10%.
 #define STABILIZATION_TIME 1000 // Let the sensor stabilize before reading
 #define BATTERY_FULL 3000 // 3,000 millivolts for 2xAA
 #define BATTERY_ZERO 2800 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up. 2.8V limit for Atmega328 without BOD disabled))
@@ -36,6 +37,30 @@ void setup()
 
 void loop()
 {
+  int moistureLevel = readMoisture();
+
+  // Send rolling average of 2 samples to get rid of the "ripple" produced by different resistance in the internal pull-up resistors
+  // See http://forum.mysensors.org/topic/2147/office-plant-monitoring/55 for more information
+  if (oldMoistureLevel == -1) { // First reading, save current value as old
+    oldMoistureLevel = moistureLevel;
+  }
+  if (moistureLevel > (oldMoistureLevel * THRESHOLD) || moistureLevel < (oldMoistureLevel / THRESHOLD)) {
+    // The change was large, so it was probably not caused by the difference in internal pull-ups.
+    // Measure again, this time with reversed polarity.
+    moistureLevel = readMoisture();
+  }
+  gw.send(msg.set((moistureLevel + oldMoistureLevel) / 2.0 / 10.23, 1));
+  oldMoistureLevel = moistureLevel;
+  long voltage = readVcc();
+  if (oldvoltage != voltage) { // Only send battery information if voltage has changed, to conserve battery.
+    gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts. Set wants volts and how many decimals (3 in our case)
+    gw.sendBatteryLevel(round((voltage - BATTERY_ZERO) * 100.0 / (BATTERY_FULL - BATTERY_ZERO)));
+    oldvoltage = voltage;
+  }
+  gw.sleep(SLEEP_TIME);
+}
+
+int readMoisture() {
   pinMode(SENSOR_ANALOG_PINS[direction], INPUT_PULLUP); // Power on the sensor
   analogRead(SENSOR_ANALOG_PINS[direction]);// Read once to let the ADC capacitor start charging
   gw.sleep(STABILIZATION_TIME);
@@ -46,22 +71,7 @@ void loop()
   digitalWrite(SENSOR_ANALOG_PINS[direction], LOW);
 
   direction = (direction + 1) % 2; // Make direction alternate between 0 and 1 to reverse polarity which reduces corrosion
-  // Always send moisture information so the controller sees that the node is alive
-
-  // Send rolling average of 2 samples to get rid of the "ripple" produced by different resistance in the internal pull-up resistors
-  // See http://forum.mysensors.org/topic/2147/office-plant-monitoring/55 for more information
-  if (oldMoistureLevel == -1) { // First reading, save value
-    oldMoistureLevel = moistureLevel;
-  }
-  gw.send(msg.set((moistureLevel + oldMoistureLevel +  0.5) / 2 / 10.23, 1));
-  oldMoistureLevel = moistureLevel;
-  long voltage = readVcc();
-  if (oldvoltage != voltage) { // Only send battery information if voltage has changed, to conserve battery.
-    gw.send(voltage_msg.set(voltage / 1000.0, 3)); // redVcc returns millivolts. Set wants volts and how many decimals (3 in our case)
-    gw.sendBatteryLevel(round((voltage - BATTERY_ZERO) * 100.0 / (BATTERY_FULL - BATTERY_ZERO)));
-    oldvoltage = voltage;
-  }
-  gw.sleep(SLEEP_TIME);
+  return moistureLevel;
 }
 
 long readVcc() {
