@@ -9,8 +9,8 @@
 #define SLEEP_TIME 1800000 // Sleep time between reads (in milliseconds)
 #define THRESHOLD 1.1 // Only make a new reading with reverse polarity if the change is larger than 10%.
 #define STABILIZATION_TIME 1000 // Let the sensor stabilize before reading
-#define BATTERY_FULL 3000 // 3,000 millivolts for 2xAA
-#define BATTERY_ZERO 2800 // 1,900 millivolts (1.9V, limit for nrf24l01 without step-up. 2.8V limit for Atmega328 without BOD disabled))
+#define BATTERY_FULL 3143 // 2xAA usually give 3.143V when full
+#define BATTERY_ZERO 2340 // 2.43V limit for 328p at 8MHz. 1.9V, limit for nrf24l01 without step-up. 2.8V limit for Atmega328 with default BOD settings.
 const int SENSOR_ANALOG_PINS[] = {A0, A1}; // Sensor is connected to these two pins. Avoid A3 if using ATSHA204. A6 and A7 cannot be used because they don't have pullups.
 
 MySensor gw;
